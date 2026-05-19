@@ -1,0 +1,202 @@
+---
+title: "COVID-19 Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    social: ['twitter','facebook','menu']
+---
+
+```{r setup, include=FALSE}
+
+#load packages : https://epirhandbook.com/en/new_pages/cleaning.html
+if(!require(pacman)) install.packages("pacman", repos = "http://cran.us.r-project.org")
+
+pacman::p_load(tidyverse,
+               dplyr, RKaggle,skimr, gtsummary, flextable, dlookr, flexdashboard,
+               knitr, DT, ggplot2, openintro, highcharter, rpivotTable, janitor, MASS,
+               ggbiplot, lubridate, RColorBrewer, plotly)
+
+
+#import data
+#use strings as factors argument to convert all strings to factors one time
+# data <- RKaggle::get_dataset("arashnic/covid19-case-surveillance-public-use-dataset")
+
+data <-  read_csv("COVID-19_Case_Surveillance_Public_Use_Data.csv")
+
+# skim(data)
+
+# str(data)
+
+data <- data |> mutate(epi_year=epiyear(cdc_report_dt), epi_week = epiweek(cdc_report_dt))
+
+overall <- data |> group_by(epi_year,epi_week) |> summarise(cases=n()) 
+
+overall_by_wk <- data |> group_by(epi_year,epi_week, cdc_report_dt) |> summarise(cases=n()) 
+
+hosp_admissions <- data |> filter(hosp_yn == "Yes")
+hosp_admissions_count <- nrow(hosp_admissions)
+```
+
+# Overview
+
+## Row
+
+### Number of Epi Weeks
+
+```{r}
+valueBox(length(overall$epi_week),
+         icon="fa-calendar-days")
+
+```
+
+### Number of Cases to Date
+
+```{r}
+valueBox(sum(overall$cases),
+         icon="fa-hospital")
+
+```
+
+### Number of Admissions to Hospital
+
+```{r}
+
+valueBox(hosp_admissions_count,
+         icon="fa-timeline")
+
+```
+
+## Column {data-width="500"}
+
+### COVID-19 Cases in 2020
+
+```{r}
+
+fig <- plot_ly(overall_by_wk, type = "scatter",mode="lines") %>%
+  add_trace(x=~cdc_report_dt, y=~cases) %>%
+  layout(showlegend = F, title='COVID-19 Cases in 2020',
+  xaxis = list(rangeslider = list(visible = T),
+               rangeselector=list(
+        buttons=list(
+        list(count=1, label="1 month", step="month", stepmode="backward"),
+        list(count=6, label="6 months", step="month", stepmode="backward"),
+        list(count=1, label="YTD", step="year", stepmode="todate"),
+        list(count=1, label="1 year", step="year", stepmode="backward"),
+        list(step="all")
+            )))) %>% 
+  layout(
+    xaxis = list(zerolinecolor = '#ffff',
+                 zerolinewidth = 2,
+                 gridcolor = 'ffff'),
+    yaxis = list(zerolinecolor = '#ffff',
+                 zerolinewidth = 2,
+                 gridcolor = 'ffff'),
+    plot_bgcolor='#e5efe5', margin = 0.1, width = 600)
+fig
+
+```
+
+Column {data-width=500}
+
+### COVID-19 Cases by Age Category
+
+```{r}
+col<-brewer.pal (9,"BrBG")
+fig.2 <- data |> 
+  filter(!is.na(age_group), age_group != "Unknown") |>  #filter out unknown and NA
+  group_by(age_group) |>
+  summarise(cases=n()) |> arrange(desc(cases)) |>
+  hchart('bar',hcaes(x=age_group,y= cases,color=col)) |>  
+  hc_add_theme(hc_theme_google()) |> 
+    #what users can see when interact with graph
+    hc_tooltip(pointFormat = "<b>Number of COVID-19 Cases: <b> {point.y} <b>")  |>
+    hc_title(text="Number of COVID-19 Cases per Age Category",
+    style=list(fontSize = "20px",fontWeight="bold")) |>
+    hc_subtitle(text="Time Period: 2020",
+    style=list(fontSize = "10px")) 
+fig.2
+
+# 
+# data %>% group_by(age_group) |>
+#   summarise(cases=n()) %>% arrange(desc(cases))
+
+```
+
+# Data Table (First 1000 Rows)
+
+```{r}
+
+data_subset <- data[1:1000,]
+
+datatable(data_subset,caption="COVID-19 Cases",
+          rownames=TRUE,
+          filter="top",
+          options(list(pageLength=25)))
+
+
+```
+
+```{=html}
+<style>
+.rpivotTable {
+   overflow: auto;
+}
+</style>
+```
+
+# Pivot Table
+
+### Pivot Table By Age Category
+
+```{r}
+rpivotTable(overall_by_wk,
+            aggregatorName="cases",
+            cols=c("epi_year","epi_week"),
+            rows="age_category",
+            renderName="Heatmap")
+```
+
+# References {data-orientation="columns"}
+
+## Column {data-width = 500}
+
+### References
+
+1.  Covid-19: Case Surveillance + Modelling [Internet]. [cited 2026 May 17]. Available from: <https://kaggle.com/code/afafathar3007/covid-19-case-surveillance-modelling>
+2.  Covid-19: Case Surveillance + Modelling [Internet]. [cited 2026 May 17]. Available from: <https://kaggle.com/code/afafathar3007/covid-19-case-surveillance-modelling>
+3.  COVID-19 Case Surveillance Public Use Data \| Data \| Centers for Disease Control and Prevention [Internet]. [cited 2026 May 17]. Available from: <https://data.cdc.gov/Case-Surveillance/COVID-19-Case-Surveillance-Public-Use-Data/vbim-akqf/about_data>
+4.  Interactive Dashboards in R \| Data Visualization with Popular Plots, Data Tables & Pivot Charts - YouTube [Internet]. [cited 2026 May 17]. Available from: <https://www.youtube.com/watch?v=_a4S4tq62OE&ab_channel=Dr.BharatendraRai>
+5.  42 Dashboards with R Markdown – The Epidemiologist R Handbook [Internet]. [cited 2026 May 17]. Available from: <https://epirhandbook.com/en/new_pages/flexdashboard.html>
+6.  Find the Perfect Icon for Your Project \| Font Awesome [Internet]. [cited 2026 May 17]. Available from: <https://fontawesome.com/search?q=time>
+7.  Time series and date axes in R [Internet]. [cited 2026 May 17]. Available from: <https://plotly.com/r/time-series/>
+8.  How to Create Cool Dashboards using R - YouTube [Internet]. [cited 2026 May 17]. Available from: <https://www.youtube.com/watch?v=fkqD9kcvCkU&t=223s&ab_channel=DatawithMiguel>
+9.  Create a value box component for a dashboard. — valueBox • flexdashboard [Internet]. [cited 2026 May 17]. Available from: <https://rstudio.github.io/flexdashboard/reference/valueBox.html>
+10. Create a value box component for a dashboard. — valueBox [Internet]. [cited 2026 May 17]. Available from: <https://rstudio.github.io/flexdashboard/reference/valueBox.html>
+11. Using flexdashboard • flexdashboard [Internet]. [cited 2026 May 17]. Available from: <https://rstudio.github.io/flexdashboard/articles/using.html>
+12. Colors in R - Easy Guides - Wiki - STHDA [Internet]. [cited 2026 May 17]. Available from: <https://www.sthda.com/english/wiki/colors-in-r>
+13. rOpenSci \| How to Cite R and R Packages [Internet]. [cited 2026 May 17]. Available from: <https://ropensci.org/blog/2021/11/16/how-to-cite-r-and-r-packages/>
+14. Gesmann M. Interactive pivot tables with R \| R-bloggers [Internet]. 2015 Mar 31 [cited 2026 May 17]. Available from: <https://www.r-bloggers.com/2015/03/interactive-pivot-tables-with-r/>
+15. RyanStochastic. How to set size of rpivotTable in rmarkdown document [Forum post]. Stack Overflow [Internet]. 2021 [cited 2026 May 17]. Available from: <https://stackoverflow.com/q/69008496>
+16. Kat. Answer to “How to set size of rpivotTable in rmarkdown document.” Stack Overflow [Internet]. 2022 [cited 2026 May 17]. Available from: <https://stackoverflow.com/a/71975709>
+17. danieldavid521. Answer to “How to set size of rpivotTable in rmarkdown document.” Stack Overflow [Internet]. 2021 [cited 2026 May 17]. Available from: <https://stackoverflow.com/a/69016410>
+
+## Column {data-width = 500}
+
+### About Report
+
+Report Generated by: Shardha Ramlal
+
+Date: `r format(Sys.Date(), format= "%B %d, %Y")`
+
+Data Source:
+
+- CDC - <https://data.cdc.gov/Case-Surveillance/COVID-19-Case-Surveillance-Public-Use-Data/vbim-akqf/about_data>
+
+- <https://www.kaggle.com/code/afafathar3007/covid-19-case-surveillance-modelling>
+
+```{r}
+#This report was generated on `r format(Sys.Date(), format="%B" %d, %Y")
+devtools::session_info()
+
+```
